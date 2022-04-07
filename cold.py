@@ -14,12 +14,19 @@ savedMnemonic = "onion wave electric town artist ostrich pupil uniform demise to
 #Create Seed from Mnemonic
 seed = mnemo.to_seed(savedMnemonic, passphrase="")
 
-#TODO Fix the xPub key to be hardened and match with the one on iancoleman.io
+
 #Create a BIP44 Wallet using the mnemonic
-master = Bip44.FromSeed(seed, Bip44Coins.BITCOIN)
+master = Bip44.FromSeed(seed, Bip44Coins.BITCOIN_TESTNET)
+
+#m/44/1/0 (0|1)
+# Derive account 0 for Bitcoin: m/44'/0'/0'
+bip44_acc_ctx = master.Purpose().Coin().Account(1)
+
+# Print keys in extended format
+print(bip44_acc_ctx.PublicKey().ToExtended())
 
 #Create the xPub Key(Root Public Key) from the wallet
-xPubKey = master.PublicKey().ToExtended()
+xPubKey = bip44_acc_ctx.PublicKey().ToExtended()
 
 f = open("pub", "w")
 f.write(xPubKey)
