@@ -236,7 +236,7 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
         console.log(transaction.isFullySigned());
         //transaction.serialize();
 
-        //console.log(transaction.toString())
+        console.log(transaction.toString())
         //broadcastToTestnet(transaction.toString());
         //console.log("Transaction Went Through!")
     }

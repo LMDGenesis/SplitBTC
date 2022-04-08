@@ -15,7 +15,6 @@ savedMnemonic = "onion wave electric town artist ostrich pupil uniform demise to
 #Create Seed from Mnemonic
 seed = mnemo.to_seed(savedMnemonic, passphrase="")
 
-
 #Create a BIP44 Wallet using the mnemonic
 master = Bip44.FromSeed(seed, Bip44Coins.BITCOIN_TESTNET)
 
@@ -33,9 +32,37 @@ f = open("pub", "w")
 f.write(xPubKey)
 f.close()
 
-
 f = open("transaction", "r")
 #print(f.read())
 transactionJson = json.loads(f.read());
 print(transactionJson)
 
+# version = "01000000"
+# Numberofinputs = "01"
+# PreviousTransHash = ""
+# PreviousOutputIndex = "0"
+# ScriptLengthIn = "19"
+# ScriptPubKeyLock = ""
+# Sequence = "ffffffff"
+# NumberOfOutputs = "01"
+# Value = ""
+# ScriptLengthOut = "19"
+# ScriptPubKeyUnlock = ""
+# Locktime = "00000000"
+# SigHashCode = "01000000"
+
+#TODO Derive Children from the private key to get kids private keys
+
+#Signing Transaction Hash
+hash = transactionJson.get("hash")
+print(hash)
+
+#TODO Sign tranasaction using the childs privkey
+#signingkey = ecdsa.SigningKey.from_string(privkey.decode('hex'), curve=ecdsa.SECP256k1)
+#SIG = signingkey.sign_digest(txhash, sigencode=ecdsa.util.sigencode_der_canonize)
+
+#TODO Rehexify and send to not cold
+#binascii.hexlify(SIG)
+
+#Writing the Unlocking Script
+# Your address -> Hex
