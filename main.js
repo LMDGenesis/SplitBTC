@@ -54,7 +54,7 @@ const getChildAtIndex = async (xpub, account_index, change) => {
 
     if (change) {
         //bip44 path to create hierarchy
-        let path = "1/" + account_index.toString();
+        let path = account_index.toString();
         let root = bip32.fromBase58(xpub, bitcoin.networks.testnet);
         let child = root.derivePath(path);
 
@@ -62,7 +62,7 @@ const getChildAtIndex = async (xpub, account_index, change) => {
 
     } else {
         //bip44 path to create hierarchy
-        let path = "0/" + account_index.toString();
+        let path = account_index.toString();
         let root = bip32.fromBase58(xpub, bitcoin.networks.testnet)
         let child = root.derivePath(path);
 
@@ -89,15 +89,13 @@ const getChildren = async(xpub) => {
     //Make sure 20 children have no transaction history
     var counter = 20;
     const xPub = xpub;
-    var change = false;
     var lastTransactionNotEmpty = false;
 
     for (let i = 0; i < counter; i++) {
 
         //Create new adddress
-        var child = await getChildAtIndex(xPub,i,change);
+        var child = await getChildAtIndex(xPub,i,false);
         var childAddress = await getAddressFromChild(child);
-        change = !change;
         
         //Check Whether address has transactions or not
         var transactions = await getTransactionsFromAddress(childAddress);
@@ -128,7 +126,7 @@ const getCurrentHead = async(childArray) => {
         var transactions = await getTransactionsFromAddress(address);
 
         if (transactions.length == 0) {
-            return childArray[i]
+            return address
         }
     }
 }
@@ -138,7 +136,7 @@ const getCurrentHead = async(childArray) => {
 const getUtxoMap = async (childArray) => {
 
     var utxoMap = new Map();
-    
+
     for (let i = 0; i < childArray.length; i++) {
         var address = await getAddressFromChild(childArray[i]);
 
@@ -155,25 +153,79 @@ const getUtxoMap = async (childArray) => {
             console.log(e);
         }
     }
+
     return utxoMap;
+}
+
+//Input: UTXO Map, List of Kids
+//Output Array of UTXO Objects in Bitcore Transaction Formation
+const writeUTXOInformation = async (utxoMap, kids) => {
+
+    //The array containing the finished UTXO objects for bitcore transactions
+    var utxoArray = [];
+
+    //Used in cold storage
+    var kidIndex = [];
+    //Loop through every kid in the UTXO Map
+    for(let i = 0; i < utxoMap.size; i++){
+
+        //The array for each child containing their UTXO information
+        var childsUtxos = utxoMap.get(kids[i])
+        //For each UTXO Information object they child has
+        for(let x = 0; x < childsUtxos.length; x++){
+
+            //console.log(childsUtxos[x]);
+            //Gather information into a UTXO object for bitcore
+
+            var transInfo = await getTransactionInformationFromTxid(childsUtxos[x].txid)
+            var address = await getAddressFromChild(kids[i])
+            var scriptPubKey = ""
+            for(let p = 0; p < transInfo.vout.length; p++){
+                if(address == transInfo.vout[p].scriptpubkey_address){
+                    scriptPubKey = transInfo.vout[p].scriptpubkey
+                }
+            }
+            //console.log(transInfo)
+            var utxo = {
+                "txId" : childsUtxos[x].txid,
+                "outputIndex" : childsUtxos[x].vout,
+                "address" : address,
+                "script" : scriptPubKey,
+                "satoshis" : childsUtxos[x].value
+            };
+            //console.log(utxo)
+            //Send that object into the utxoArray
+            kidIndex.push(kids[i].index)
+            utxoArray.push(utxo)
+        }
+        fs.writeFile('childIndex', JSON.stringify(kidIndex), err => {
+            if (err) {
+              console.error(err)
+              return
+            }
+            console.log("Wrote Utxos Information to utxoInfo")
+            //file written successfully
+        })
+        
+    }
+    return utxoArray
+}
+
+//Input: Array of Utxo Information
+//Output: Writes Utxo information to a file
+const fileUtxos = async (utxoInformationArray) => {
+    fs.writeFile('utxoInfo', JSON.stringify(utxoInformationArray), err => {
+        if (err) {
+          console.error(err)
+          return
+        }
+        console.log("Wrote Utxos Information to utxoInfo")
+        //file written successfully
+    })
 }
 
 //Create transactions
 //====================================================================
-
-//TODO
-//Takes in a map of addresses with UTXOs
-//Returns a transacton message that needs to be signed
-const getTransactionMessage = async (utxoMap, currentHead) => {
-
-    const utxomap = utxoMap;
-    const head = currentHead;
-
-    //var transaction = new Transaction()
-    
-
-    return null;
-}
 
 //Main
 //====================================================================
@@ -189,39 +241,26 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
         console.log("xPub: ", xPub);
 
         const kids = await getChildren(xPub);
-        //const addressFromFirstKid = await getAddressFromChild(kids[0])
-        //console.log("Address: ", addressFromFirstKid)
-        //The current head refers to the earliest child in kids that doesn't have any transactions
+        const currentHead = await getCurrentHead(kids);
 
-        //const head = await getCurrentHead(kids);
-        //console.log("Current Head Child's Address: ", await getAddressFromChild(head));
-
+        console.log("Head Index: ", currentHead)
         const utxoMap = await getUtxoMap(kids)
         //console.log("Utxo Map: ", utxoMap);
-
-        //Get ScriptPubKey for a Given Child
-        //const scriptPubKey = (await getTransactionInformationFromTxid(utxoMap.get(kids[0])[0].txid)).vout[0].scriptpubkey;
-        //76a914048afd56271542e9ed2315294de350e30a9f7a4188ac
-
-        //Manually Writing the UTXO
-        var utxo = {
-            "txId" : "7523242efb3f8585855e9b10460f3ef98f61a89ae976c722c0618d6032d0bdd8",
-            "outputIndex" : 0,
-            "address" : "mfvyVzF63cXU5kGF5oi4dpT7JNjaTUDvvQ",
-            "script" : "76a914048afd56271542e9ed2315294de350e30a9f7a4188ac",
-            "satoshis" : 50000
-        };
+        console.log("Utxo List: ", await writeUTXOInformation(utxoMap,kids));
+        const utxosArray = await writeUTXOInformation(utxoMap,kids);
+        fileUtxos(utxosArray);
 
         //Create Transaction Object
         var transaction = new bitcore.Transaction();
-        transaction.from(utxo);
-        transaction.to('mm8m3pg3PaJWNeANsMC2yy2PmgWLtqixAg', 15000);
-        transaction.change('mm8m3pg3PaJWNeANsMC2yy2PmgWLtqixAg');
+        transaction.from(utxosArray);
+
+        //Address to send it to and the amount to send
+        transaction.to('muLerdAGGHRE6raUcpxK8dFHj8GAMrm5wZ', 150000);
+        //Current Head to send change to
+        transaction.change(currentHead);
 
         //Send Transaction Object Without Signature over to Cold as Json
-        //console.log(transaction.toObject());
-
-        fs.writeFile('transaction', JSON.stringify(transaction.toObject()), err => {
+        fs.writeFile('transaction', transaction.toString(), err => {
             if (err) {
               console.error(err)
               return
@@ -229,15 +268,30 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
             console.log("Wrote Object To File")
             //file written successfully
         })
+        //Run the python file
+        
+        //console.log(transaction.toString())
 
-        transaction.sign("cW8YvnXxjFiHwnaKfVQbewzACkUEUDcbn91epFN83qvPcAuoNMJw");
+        fs.readFile("signedTransaction", "utf8", async function readFileCallback(err, data) {
+
+            if (err) {
+                console.log(err);
+            }else{
+
+                let signedTransaction = data;
+                broadcastToTestnet(signedTransaction)
+                console.log(signedTransaction)
+                //console.log("Transaction Went Through!")
+            }
+        })
+        //transaction.sign("cW8YvnXxjFiHwnaKfVQbewzACkUEUDcbn91epFN83qvPcAuoNMJw");
         //console.log(transaction.serialize());
 
-        console.log(transaction.isFullySigned());
+        //console.log(transaction.isFullySigned());
         //transaction.serialize();
 
-        console.log(transaction.toString())
+        //console.log(transaction.toString())
         //broadcastToTestnet(transaction.toString());
-        //console.log("Transaction Went Through!")
+        //console.log("Transaction Went Through!")*/
     }
 });

@@ -1,68 +1,89 @@
-
-from mnemonic import Mnemonic
-from bip_utils import Bip44Coins, Bip44
+from hdwallet import HDWallet
+from hdwallet.symbols import BTCTEST as SYMBOL
+from hdwallet.derivations import BIP44Derivation
+from hdwallet.utils import generate_mnemonic
+from typing import Optional
+from btcpy.setup import setup
+from btcpy.structs.transaction import Transaction, TransactionFactory, MutableTransaction, TxIn, TxOut, Locktime
+from btcpy.structs.crypto import PrivateKey, PublicKey
+from btcpy.structs.script import Script, ScriptBuilder, PublicKey, ScriptSig
+from btcpy.structs.sig import Solver, Sighash, P2pkhScript, P2pkhSolver, P2wshV0Solver
 import json
 
-#The varaiable that will be the onlything exposed from cold
-global xPubKey
-global master
-mnemo = Mnemonic("english")
-# myMnemonic = mnemo.generate(strength=256)
+# Generate english mnemonic words
+mnemonic = "genre clinic accident dolphin disease sorry library radio regular echo exhibit return identify nice tiny quit act tunnel guess flush chaos pelican slender gaze"
 
-#! Remove this from hard code to file
-savedMnemonic = "onion wave electric town artist ostrich pupil uniform demise tomato basic include trumpet brain museum weekend room parent session grant cup ensure feel lemon"
+def sendXPubKey(mnemonic): 
+    wallet = HDWallet(SYMBOL, False)
+    root = wallet.from_mnemonic(mnemonic)
+    child = root.from_path("m/44'/1'/1'/0")
+    xPubKey = child.xpublic_key()
+    f = open("pub", "w")
+    f.write(xPubKey)
+    f.close()
+    
 
-#Create Seed from Mnemonic
-seed = mnemo.to_seed(savedMnemonic, passphrase="")
-
-#Create a BIP44 Wallet using the mnemonic
-master = Bip44.FromSeed(seed, Bip44Coins.BITCOIN_TESTNET)
-
-#m/44/1/0 (0|1)
-# Derive account 0 for Bitcoin: m/44'/0'/0'
-bip44_acc_ctx = master.Purpose().Coin().Account(1)
-
-# Print keys in extended format
-#print(bip44_acc_ctx.PublicKey().ToExtended())
-
-#Create the xPub Key(Root Public Key) from the wallet
-xPubKey = bip44_acc_ctx.PublicKey().ToExtended()
-
-f = open("pub", "w")
-f.write(xPubKey)
-f.close()
+sendXPubKey(mnemonic)
 
 f = open("transaction", "r")
-#print(f.read())
-transactionJson = json.loads(f.read());
-print(transactionJson)
+transaction = f.read()
+f.close()
 
-# version = "01000000"
-# Numberofinputs = "01"
-# PreviousTransHash = ""
-# PreviousOutputIndex = "0"
-# ScriptLengthIn = "19"
-# ScriptPubKeyLock = ""
-# Sequence = "ffffffff"
-# NumberOfOutputs = "01"
-# Value = ""
-# ScriptLengthOut = "19"
-# ScriptPubKeyUnlock = ""
-# Locktime = "00000000"
-# SigHashCode = "01000000"
+f = open("childIndex", "r")
+kidsIndex = f.read()
+f.close()
+kidsIndex = json.loads(kidsIndex)
 
-#TODO Derive Children from the private key to get kids private keys
+f = open("utxoInfo", "r")
+utxoInfo = f.read()
+f.close()
 
-#Signing Transaction Hash
-hash = transactionJson.get("hash")
-print(hash)
+utxoInfoArray = json.loads(utxoInfo)
 
-#TODO Sign tranasaction using the childs privkey
-#signingkey = ecdsa.SigningKey.from_string(privkey.decode('hex'), curve=ecdsa.SECP256k1)
-#SIG = signingkey.sign_digest(txhash, sigencode=ecdsa.util.sigencode_der_canonize)
+counter = 0;
+unlocks = []
+locks = []
 
-#TODO Rehexify and send to not cold
-#binascii.hexlify(SIG)
+#For each index in childIndex create an unlock script and x locks
+for index in kidsIndex:
+    wallet = HDWallet(SYMBOL, False)
+    root = wallet.from_mnemonic(mnemonic)
+    child = root.from_path("m/44'/1'/1'/0/"+str(index))
+    
 
-#Writing the Unlocking Script
-# Your address -> Hex
+    # print(json.dumps(child.dumps(), indent=4, ensure_ascii=False))
+    
+    private = child.private_key()
+    priv = PrivateKey.unhexlify(private)
+
+    pub = child.public_key()
+    public = PublicKey.unhexlify(pub)
+    
+    lock = P2pkhScript(public)
+    unlock = P2pkhSolver(priv)
+
+    # print("Counter: ", counter)
+    # print("Index: ", index)
+    # print("Child: ", child)
+    # print("Priv: ", priv)
+    # print("Pub: ", public)
+    # print("Lock: ", lock)
+    # print("Unlock: ", unlock)
+    
+    txOut = TxOut(value=utxoInfoArray[counter].get("satoshis"),n=utxoInfoArray[counter].get("outputIndex"), script_pubkey=lock)
+    # print("TxOut: ", txOut)
+    locks.append(txOut)
+    unlocks.append(unlock)
+    
+    counter+=1;
+    
+unsigned = MutableTransaction.unhexlify(transaction)
+print(unsigned)
+signed = unsigned.spend(locks, unlocks)
+print(signed)
+signed = signed.hexlify()
+
+
+f = open("signedTransaction", "w")
+f.write(signed)
+f.close()
