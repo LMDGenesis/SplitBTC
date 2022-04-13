@@ -131,6 +131,19 @@ const getCurrentHead = async(childArray) => {
     }
 }
 
+const getCurrentHeadKid = async(childArray) => {
+
+    for (let i = 0; i < childArray.length; i++) {
+        var address = await getAddressFromChild(childArray[i]);
+        //console.log(address);
+        var transactions = await getTransactionsFromAddress(address);
+
+        if (transactions.length == 0) {
+            return childArray[i]
+        }
+    }
+}
+
 //Takes in a list of addresses
 //Returns a map with a keypair of children and their utxos
 const getUtxoMap = async (childArray) => {
@@ -148,6 +161,9 @@ const getUtxoMap = async (childArray) => {
             if(resp.data.length > 0) {
                 utxoMap.set(childArray[i], resp.data)
             }
+            else{
+                utxoMap.set(childArray[i], [])
+            }
 
         } catch (e) {
             console.log(e);
@@ -161,16 +177,21 @@ const getUtxoMap = async (childArray) => {
 //Output Array of UTXO Objects in Bitcore Transaction Formation
 const writeUTXOInformation = async (utxoMap, kids) => {
 
+    var headIndex = await getCurrentHeadKid(kids)
     //The array containing the finished UTXO objects for bitcore transactions
     var utxoArray = [];
 
     //Used in cold storage
     var kidIndex = [];
+
     //Loop through every kid in the UTXO Map
-    for(let i = 0; i < utxoMap.size; i++){
+    for(let i = headIndex.index-1; i > 0 ; i--){
 
         //The array for each child containing their UTXO information
+
         var childsUtxos = utxoMap.get(kids[i])
+
+        console.log(utxoMap.get(kids[i]))
         //For each UTXO Information object they child has
         for(let x = 0; x < childsUtxos.length; x++){
 
@@ -203,7 +224,7 @@ const writeUTXOInformation = async (utxoMap, kids) => {
               console.error(err)
               return
             }
-            console.log("Wrote Utxos Information to utxoInfo")
+            console.log("childIndex Updated")
             //file written successfully
         })
         
@@ -246,7 +267,7 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
         console.log("Head Index: ", currentHead)
         const utxoMap = await getUtxoMap(kids)
         //console.log("Utxo Map: ", utxoMap);
-        console.log("Utxo List: ", await writeUTXOInformation(utxoMap,kids));
+        //console.log("Utxo List: ", await writeUTXOInformation(utxoMap,kids));
         const utxosArray = await writeUTXOInformation(utxoMap,kids);
         fileUtxos(utxosArray);
 
@@ -255,7 +276,7 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
         transaction.from(utxosArray);
 
         //Address to send it to and the amount to send
-        transaction.to('muLerdAGGHRE6raUcpxK8dFHj8GAMrm5wZ', 150000);
+        transaction.to('tb1qjg3xv4pfzcwhrph7lz3pmzrwhalq8y839k7p9d', 150000);
         //Current Head to send change to
         transaction.change(currentHead);
 
@@ -280,8 +301,8 @@ fs.readFile("pub", "utf8", async function readFileCallback(err, data) {
 
                 let signedTransaction = data;
                 broadcastToTestnet(signedTransaction)
-                console.log(signedTransaction)
-                //console.log("Transaction Went Through!")
+                //console.log(signedTransaction)
+                console.log("Transaction Went Through!")
             }
         })
         //transaction.sign("cW8YvnXxjFiHwnaKfVQbewzACkUEUDcbn91epFN83qvPcAuoNMJw");
